@@ -19,6 +19,7 @@
 --  ************************************************************************
 
 local nn = require 'nn'
+local utils = paths.dofile'utils.lua'
 
 local Convolution = nn.SpatialConvolution
 local Avg = nn.SpatialAveragePooling
@@ -126,26 +127,10 @@ local function createModel(opt)
       model:add(nn.Linear(nStages[4], opt.num_classes))
    end
 
-   local function ConvInit(name)
-      for k,v in pairs(model:findModules(name)) do
-         local n = v.kW*v.kH*v.nOutputPlane
-         v.weight:normal(0,math.sqrt(2/n))
-         v.bias = nil
-         v.gradBias = nil
-      end
-   end
-   local function BNInit(name)
-      for k,v in pairs(model:findModules(name)) do
-         v.weight:fill(1)
-         v.bias:zero()
-      end
-   end
-
-   ConvInit('nn.SpatialConvolution')
-   BNInit('nn.SpatialBatchNormalization')
-   for k,v in pairs(model:findModules('nn.Linear')) do
-      v.bias:zero()
-   end
+   utils.DisableBias(model)
+   utils.testModel(model)
+   utils.MSRinit(model)
+   utils.FCinit(model)
 
    -- model:get(1).gradInput = nil
 

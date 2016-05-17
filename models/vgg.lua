@@ -1,6 +1,7 @@
 -- This is a modified version of VGG network in
 -- https://github.com/szagoruyko/cifar.torch
 require 'nn'
+local utils = paths.dofile'utils.lua'
 
 local model = nn.Sequential()
 
@@ -33,18 +34,8 @@ model:add(nn.SpatialAveragePooling(2,2,2,2):ceil())
 model:add(nn.View(-1):setNumInputDims(3))
 model:add(nn.Linear(512,opt and opt.num_classes or 10))
 
--- initialization from MSR
-local function MSRinit(net)
-   for k,v in pairs(net:findModules('nn.SpatialConvolution')) do
-      local n = v.kW*v.kH*v.nOutputPlane
-      v.weight:normal(0,math.sqrt(2/n))
-      if v.bias then v.bias:zero() end
-   end
-end
-
--- check that we can propagate forward without errors
--- print(#model:float():forward(torch.FloatTensor(16,3,32,32))); model:reset()
-
-MSRinit(model)
+utils.FCinit(model)
+utils.testModel(model)
+utils.MSRinit(model)
 
 return model

@@ -52,6 +52,8 @@ As WRN are much faster to train than ResNet we don't provide and multi-GPU code.
 
 # Implementation details
 
+The code evolved from https://github.com/szagoruyko/cifar.torch
+
 ## Optnet
 
 To reduce memory usage we use @fmassa's optimize-net, which automatically shares output and gradient tensors between modules. This keeps memory usage below 4 Gb even for our widest networks. Also, it can generate network graph plots as the one for WRN-16-2 below.

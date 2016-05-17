@@ -17,19 +17,19 @@ opt = {
   dataset = './datasets/cifar10_whitened.t7',
   save = 'logs',
   batchSize = 128,
-  learningRate = 1,
-  learningRateDecay = 1e-7,
-  learningRateDecayRatio = 0.5,
+  learningRate = 0.1,
+  learningRateDecay = 0,
+  learningRateDecayRatio = 0.2,
   weightDecay = 0.0005,
   dampening = 0,
   momentum = 0.9,
-  epoch_step = "25",
+  epoch_step = "80",
   max_epoch = 300,
   model = 'alexnet',
   optimMethod = 'sgd',
   init_value = 10,
   depth = 50,
-  shortcutType = 'B',
+  shortcutType = 'A',
   nesterov = false,
   dropout = 0,
   hflip = true,
@@ -37,7 +37,8 @@ opt = {
   imageSize = 32,
   randomcrop_type = 'zero',
   cudnn_fastest = true,
-  optnet_optimize = false,
+  cudnn_deterministic = false,
+  optnet_optimize = true,
   generate_graph = false,
   multiply_input_factor = 1,
   widen_factor = 1,
@@ -65,7 +66,7 @@ cudnn.benchmark = true
 if opt.cudnn_fastest then
    for i,v in ipairs(net:findModules'cudnn.SpatialConvolution') do v:fastest() end
 end
-if opt.cudnn == 'deterministic' then
+if opt.cudnn_deterministic then
    model:apply(function(m) if m.setMode then m:setMode(1,1,1) end end)
 end
 
@@ -91,9 +92,9 @@ opt.n_parameters = parameters:numel()
 print('Network has ', parameters:numel(), 'parameters')
 
 print(c.blue'==>' ..' setting criterion')
-criterion = nn.CrossEntropyCriterion():cuda()
+local criterion = nn.CrossEntropyCriterion():cuda()
 
--- in case we want autograd
+-- a-la autograd
 local f = function(inputs, targets)
    model:forward(inputs)
    local loss = criterion:forward(model.output, targets)
@@ -103,8 +104,8 @@ local f = function(inputs, targets)
 end
 
 print(c.blue'==>' ..' configuring optimizer')
-optimState = tablex.deepcopy(opt)
-optimMethod = optim[opt.optimMethod]
+local optimState = tablex.deepcopy(opt)
+local optimMethod = optim[opt.optimMethod]
 
 
 function train()

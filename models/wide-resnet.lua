@@ -17,7 +17,11 @@
 --  ************************************************************************
 
 local nn = require 'nn'
-require 'cunn'
+local utils = paths.dofile'utils.lua'
+
+assert(opt and opt.depth)
+assert(opt and opt.blocktype)
+assert(opt and opt.num_classes)
 
 local Convolution = nn.SpatialConvolution
 local Avg = nn.SpatialAveragePooling
@@ -26,7 +30,7 @@ local Max = nn.SpatialMaxPooling
 local SBatchNorm = nn.SpatialBatchNormalization
 
 local function Dropout()
-   return nn[opt.dropout_type](opt.dropout and opt.dropout or 0,nil,true)
+   return nn.Dropout(opt and opt.dropout or 0,nil,true)
 end
 
 local function createModel(opt)
@@ -51,13 +55,11 @@ local function createModel(opt)
             u[3], u[4] = stride, stride
             convs:add(Convolution(nInputPlane,nBottleneckPlane,table.unpack(u)))
          else
-            for j=1,opt.resnet_pre_act_inner do
             convs:add(SBatchNorm(nBottleneckPlane)):add(ReLU(true))
             if opt.dropout > 0 then
                convs:add(Dropout())
             end
             convs:add(Convolution(nBottleneckPlane,nBottleneckPlane,table.unpack(v)))
-            end
          end
       end
      
@@ -113,27 +115,11 @@ local function createModel(opt)
       model:add(nn.Linear(nStages[4], opt.num_classes))
    end
 
-   local function ConvInit(name)
-      for k,v in pairs(model:findModules(name)) do
-         local n = v.kW*v.kH*v.nOutputPlane
-         v.weight:normal(0,math.sqrt(2/n))
-         v.bias = nil
-         v.gradBias = nil
-      end
-   end
-   local function BNInit(name)
-      for k,v in pairs(model:findModules(name)) do
-         v.weight:fill(1)
-         v.bias:zero()
-      end
-   end
-
-   ConvInit('nn.SpatialConvolution')
-   BNInit('nn.SpatialBatchNormalization')
-   for k,v in pairs(model:findModules('nn.Linear')) do
-      v.bias:zero()
-   end
-
+   utils.DisableBias(model)
+   utils.testModel(model)
+   utils.MSRinit(model)
+   utils.FCinit(model)
+   
    -- model:get(1).gradInput = nil
 
    return model
