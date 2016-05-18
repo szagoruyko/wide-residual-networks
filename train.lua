@@ -131,7 +131,7 @@ function train()
     optimMethod(feval, parameters, optimState)
   end
 
-  return loss
+  return loss / #indices
 end
 
 
