@@ -53,32 +53,35 @@ local provider = torch.load(opt.dataset)
 opt.num_classes = provider.testData.labels:max()
 
 print(c.blue '==>' ..' configuring model')
-local net = dofile('models/'..opt.model..'.lua'):cuda()
 local model = nn.Sequential()
-local function add(flag, module) if flag then model:add(module) end end
-add(opt.hflip, nn.BatchFlip():float())
-add(opt.randomcrop > 0, nn.RandomCrop(opt.randomcrop, opt.randomcrop_type):float())
-model:add(nn.Copy('torch.FloatTensor','torch.CudaTensor'):cuda())
-model:add(net)
+local net = dofile('models/'..opt.model..'.lua'):cuda()
+do
+   local function add(flag, module) if flag then model:add(module) end end
+   add(opt.hflip, nn.BatchFlip():float())
+   add(opt.randomcrop > 0, nn.RandomCrop(opt.randomcrop, opt.randomcrop_type):float())
+   model:add(nn.Copy('torch.FloatTensor','torch.CudaTensor'):cuda())
+   add(opt.multiply_input_factor ~= 1, nn.MulConstant(opt.multiply_input_factor):cuda())
+   model:add(net)
 
-cudnn.convert(net, cudnn)
-cudnn.benchmark = true
-if opt.cudnn_fastest then
-   for i,v in ipairs(net:findModules'cudnn.SpatialConvolution') do v:fastest() end
-end
-if opt.cudnn_deterministic then
-   model:apply(function(m) if m.setMode then m:setMode(1,1,1) end end)
-end
+   cudnn.convert(net, cudnn)
+   cudnn.benchmark = true
+   if opt.cudnn_fastest then
+      for i,v in ipairs(net:findModules'cudnn.SpatialConvolution') do v:fastest() end
+   end
+   if opt.cudnn_deterministic then
+      model:apply(function(m) if m.setMode then m:setMode(1,1,1) end end)
+   end
 
-print(net)
-print('Network has', #model:findModules'cudnn.SpatialConvolution', 'convolutions')
+   print(net)
+   print('Network has', #model:findModules'cudnn.SpatialConvolution', 'convolutions')
 
-local sample_input = torch.randn(8,3,opt.imageSize,opt.imageSize):cuda()
-if opt.generate_graph then
-   iterm.dot(graphgen(net, sample_input), opt.save..'/graph.pdf')
-end
-if opt.optnet_optimize then
-   optnet.optimizeMemory(net, sample_input, {inplace = false, mode = 'training'})
+   local sample_input = torch.randn(8,3,opt.imageSize,opt.imageSize):cuda()
+   if opt.generate_graph then
+      iterm.dot(graphgen(net, sample_input), opt.save..'/graph.pdf')
+   end
+   if opt.optnet_optimize then
+      optnet.optimizeMemory(net, sample_input, {inplace = false, mode = 'training'})
+   end
 end
 
 local function log(t) print('json_stats: '..json.encode(tablex.merge(t,opt,true))) end
@@ -105,30 +108,28 @@ end
 
 print(c.blue'==>' ..' configuring optimizer')
 local optimState = tablex.deepcopy(opt)
-local optimMethod = optim[opt.optimMethod]
 
 
 function train()
   model:training()
-
-  local loss = 0
 
   local targets = torch.CudaTensor(opt.batchSize)
   local indices = torch.randperm(provider.trainData.data:size(1)):long():split(opt.batchSize)
   -- remove last element so that all the batches have equal size
   indices[#indices] = nil
 
+  local loss = 0
+
   for t,v in ipairs(indices) do
     local inputs = provider.trainData.data:index(1,v)
     targets:copy(provider.trainData.labels:index(1,v))
 
-    local feval = function(x)
+    optim[opt.optimMethod](function(x)
       if x ~= parameters then parameters:copy(x) end
       gradParameters:zero()
       loss = loss + f(inputs, targets)
       return f,gradParameters
-    end
-    optimMethod(feval, parameters, optimState)
+    end, parameters, optimState)
   end
 
   return loss / #indices
@@ -136,20 +137,17 @@ end
 
 
 function test()
-  local confusion = optim.ConfusionMatrix(opt.num_classes)
-
   model:evaluate()
-  local bs = opt.batchSize
-  local data_split = provider.testData.data:split(bs,1)
-  local labels_split = provider.testData.labels:split(bs,1)
+  local confusion = optim.ConfusionMatrix(opt.num_classes)
+  local data_split = provider.testData.data:split(opt.batchSize,1)
+  local labels_split = provider.testData.labels:split(opt.batchSize,1)
+
   for i,v in ipairs(data_split) do
-    local outputs = model:forward(v)
-    confusion:batchAdd(outputs, labels_split[i])
+    confusion:batchAdd(model:forward(v), labels_split[i])
   end
 
   confusion:updateValids()
-  local test_acc = confusion.totalValid * 100
-  return test_acc
+  return confusion.totalValid * 100
 end
 
 
@@ -159,7 +157,6 @@ for epoch=1,opt.max_epoch do
     opt.learningRate = lr or opt.learningRate * opt.learningRateDecayRatio
     optimState = tablex.deepcopy(opt)
   end
-  optimState.learningRate = opt.learningRate / opt.learningRateDecayRatio
   if torch.type(opt.epoch_step) == 'number' and epoch % opt.epoch_step == 0 then
      updateLR()
   elseif torch.type(opt.epoch_step) == 'table' and tablex.find(opt.epoch_step, epoch) then
