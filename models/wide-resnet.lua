@@ -20,7 +20,6 @@ local nn = require 'nn'
 local utils = paths.dofile'utils.lua'
 
 assert(opt and opt.depth)
-assert(opt and opt.blocktype)
 assert(opt and opt.num_classes)
 
 local Convolution = nn.SpatialConvolution
@@ -38,11 +37,12 @@ local function createModel(opt)
 
    local blocks = {}
    
-   local function bottleneck(conv_params, nInputPlane, nOutputPlane, stride)
-      local nBottleneckPlane = nOutputPlane / 4
-      if opt.resnet_nobottleneck then
-         nBottleneckPlane = nOutputPlane
-      end
+   local function wide_basic(nInputPlane, nOutputPlane, stride)
+      local conv_params = {
+         {3,3,stride,stride,1,1},
+         {3,3,1,1,1,1},
+      }
+      local nBottleneckPlane = nOutputPlane
 
       local block = nn.Sequential()
       local convs = nn.Sequential()     
@@ -51,9 +51,7 @@ local function createModel(opt)
          if i == 1 then
             local module = nInputPlane == nOutputPlane and convs or block
             module:add(SBatchNorm(nInputPlane)):add(ReLU(true))
-            local u = v
-            u[3], u[4] = stride, stride
-            convs:add(Convolution(nInputPlane,nBottleneckPlane,table.unpack(u)))
+            convs:add(Convolution(nInputPlane,nBottleneckPlane,table.unpack(v)))
          else
             convs:add(SBatchNorm(nBottleneckPlane)):add(ReLU(true))
             if opt.dropout > 0 then
@@ -73,17 +71,6 @@ local function createModel(opt)
             :add(shortcut))
          :add(nn.CAddTable(true))
    end
-
-   function blocks.bottleneck(...)
-      return bottleneck({
-         {1,1,-1,-1,0,0},
-         {3,3,1,1,1,1},
-         {1,1,1,1,0,0},
-      },...)
-   end
-
-   local bottleneck = blocks[opt.blocktype]
-   assert(bottleneck)
 
    -- Stacking Residual Units on the same stage
    local function layer(block, nInputPlane, nOutputPlane, count, stride)
@@ -105,9 +92,9 @@ local function createModel(opt)
       nStages:narrow(1,2,nStages:size(1)-1):mul(opt.widen_factor)
 
       model:add(Convolution(3,nStages[1],3,3,1,1,1,1)) -- one conv at the beginning (spatial size: 32x32)
-      model:add(layer(bottleneck, nStages[1], nStages[2], n, 1)) -- Stage 1 (spatial size: 32x32)
-      model:add(layer(bottleneck, nStages[2], nStages[3], n, 2)) -- Stage 2 (spatial size: 16x16)
-      model:add(layer(bottleneck, nStages[3], nStages[4], n, 2)) -- Stage 3 (spatial size: 8x8)
+      model:add(layer(wide_basic, nStages[1], nStages[2], n, 1)) -- Stage 1 (spatial size: 32x32)
+      model:add(layer(wide_basic, nStages[2], nStages[3], n, 2)) -- Stage 2 (spatial size: 16x16)
+      model:add(layer(wide_basic, nStages[3], nStages[4], n, 2)) -- Stage 3 (spatial size: 8x8)
       model:add(SBatchNorm(nStages[4]))
       model:add(ReLU(true))
       model:add(Avg(8, 8, 1, 1))
