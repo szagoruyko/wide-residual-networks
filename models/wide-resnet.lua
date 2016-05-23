@@ -21,6 +21,7 @@ local utils = paths.dofile'utils.lua'
 
 assert(opt and opt.depth)
 assert(opt and opt.num_classes)
+assert(opt and opt.widen_factor)
 
 local Convolution = nn.SpatialConvolution
 local Avg = nn.SpatialAveragePooling
@@ -88,8 +89,8 @@ local function createModel(opt)
       assert((depth - 4) % 6 == 0, 'depth should be 6n+4')
       local n = (depth - 4) / 6
 
-      local nStages = torch.Tensor{16, 16, 32, 64}
-      nStages:narrow(1,2,nStages:size(1)-1):mul(opt.widen_factor)
+      local k = opt.widen_factor
+      local nStages = torch.Tensor{16, 16*k, 32*k, 64*k}
 
       model:add(Convolution(3,nStages[1],3,3,1,1,1,1)) -- one conv at the beginning (spatial size: 32x32)
       model:add(layer(wide_basic, nStages[1], nStages[2], n, 1)) -- Stage 1 (spatial size: 32x32)
