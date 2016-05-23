@@ -115,7 +115,7 @@ function train()
 
   local targets = torch.CudaTensor(opt.batchSize)
   local indices = torch.randperm(provider.trainData.data:size(1)):long():split(opt.batchSize)
-  -- remove last element so that all the batches have equal size
+  -- remove last element so that all minibatches have equal size
   indices[#indices] = nil
 
   local loss = 0
