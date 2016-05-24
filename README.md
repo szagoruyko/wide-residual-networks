@@ -77,7 +77,7 @@ model=wide-resnet widen_factor=8 depth=16 ./scripts/train_cifar.sh
 This will train WRN-40-4 on CIFAR-10 whitened (supposed to be in `datasets` folder). This network achieves about the same accuracy as ResNet-1001 and trains in 6 hours on a single Titan X. 
 Log is saved to `logs/wide-resnet_$RANDOM$RANDOM` folder with json entries for each epoch and can be visualized with itorch/ipython later.
 
-For reference we provide logs for this experiment and ipython notebook to visualize the results in [notebooks/visualize.ipynb](notebooks/visualize.ipynb). After running it you should see these training curves:
+For reference we provide logs for this experiment and [ipython notebook](notebooks/visualize.ipynb) to visualize the results. After running it you should see these training curves:
 
 ![viz](https://cloud.githubusercontent.com/assets/4953728/15482840/11b46698-2132-11e6-931e-04680ae42c3c.png)
 
