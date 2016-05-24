@@ -1,5 +1,9 @@
 -- This is a modified version of VGG network in
 -- https://github.com/szagoruyko/cifar.torch
+-- Modifications:
+--  * removed dropout
+--  * last nn.Linear layers substituted with convolutional layers
+--    and avg-pooling
 require 'nn'
 local utils = paths.dofile'utils.lua'
 

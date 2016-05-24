@@ -1,5 +1,10 @@
 -- This is a modified version of NIN network in
 -- https://github.com/szagoruyko/cifar.torch
+-- Network-In-Network: http://arxiv.org/abs/1312.4400
+-- Modifications:
+--  * removed dropout
+--  * added BatchNorm
+--  * the last layer changed from avg-pooling to linear (works better)
 require 'nn'
 local utils = paths.dofile'utils.lua'
 

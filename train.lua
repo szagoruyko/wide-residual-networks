@@ -1,3 +1,5 @@
+-- Code for Wide Residual Networks
+-- (c) Sergey Zagoruyko, 2016
 require 'xlua'
 require 'optim'
 require 'image'
@@ -25,7 +27,7 @@ opt = {
   momentum = 0.9,
   epoch_step = "80",
   max_epoch = 300,
-  model = 'alexnet',
+  model = 'nin',
   optimMethod = 'sgd',
   init_value = 10,
   depth = 50,
@@ -153,14 +155,11 @@ end
 
 for epoch=1,opt.max_epoch do
   print('==>'.." online epoch # " .. epoch .. ' [batchSize = ' .. opt.batchSize .. ']')
-  local function updateLR(lr)
-    opt.learningRate = lr or opt.learningRate * opt.learningRateDecayRatio
+  -- drop learning rate and reset momentum vector
+  if torch.type(opt.epoch_step) == 'number' and epoch % opt.epoch_step == 0 or
+     torch.type(opt.epoch_step) == 'table' and tablex.find(opt.epoch_step, epoch) then
+    opt.learningRate = opt.learningRate * opt.learningRateDecayRatio
     optimState = tablex.deepcopy(opt)
-  end
-  if torch.type(opt.epoch_step) == 'number' and epoch % opt.epoch_step == 0 then
-     updateLR()
-  elseif torch.type(opt.epoch_step) == 'table' and tablex.find(opt.epoch_step, epoch) then
-     updateLR()
   end
 
   local function t(f) local s = torch.Timer(); return f(), s:time().real end
