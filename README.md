@@ -45,7 +45,7 @@ luarocks install optnet
 luarocks install iterm
 ```
 
-We recommend installing CUDNN v5 for speed. Alternatively you can run on CPU or on GPU with OpenCL.
+We recommend installing CUDNN v5 for speed. Alternatively you can run on CPU or on GPU with OpenCL (coming).
 
 For visualizing training curves we used ipython notebook with pandas and bokeh and suggest using anaconda.
 
