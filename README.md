@@ -71,7 +71,7 @@ We are running ImageNet experiments and will update the paper and this repo soon
 We provide several scripts for reproducing results in the paper. Below are several examples.
 
 ```bash
-model=wide-resnet widen_factor=8 depth=16 ./scripts/train_cifar.sh
+model=wide-resnet widen_factor=4 depth=40 ./scripts/train_cifar.sh
 ```
 
 This will train WRN-40-4 on CIFAR-10 whitened (supposed to be in `datasets` folder). This network achieves about the same accuracy as ResNet-1001 and trains in 6 hours on a single Titan X. 
