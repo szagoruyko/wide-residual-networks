@@ -1,7 +1,7 @@
 Code for Wide Residual Networks
 =============
 
-This code was used for experiments with Wide Residual Networks http://arxiv.org/abs/1504.03641 by Sergey Zagoruyko and Nikos Komodakis.
+This code was used for experiments with Wide Residual Networks http://arxiv.org/abs/1605.07146 by Sergey Zagoruyko and Nikos Komodakis.
 
 Deep residual networks were shown to be able to scale up to thousands of
 layers and still have improving performance. However, each fraction of a
@@ -32,7 +32,7 @@ pre-ResNet-1001 | 4.92 | 22.71
 WRN-28-10 | **4.17** | 20.5
 WRN-28-10-dropout| 4.39 | **20.0**
 
-See http://arxiv.org/abs/1504.03641 for details.
+See http://arxiv.org/abs/1605.07146 for details.
 
 <img src=https://cloud.githubusercontent.com/assets/4953728/15482554/91f041da-2130-11e6-87be-d3cee0867ac5.png width=440><img src=https://cloud.githubusercontent.com/assets/4953728/15482555/9217de66-2130-11e6-9a25-8d0ff4f07e15.png width=440>
 
@@ -103,4 +103,4 @@ Additional models in this repo:
 
 The code evolved from https://github.com/szagoruyko/cifar.torch. To reduce memory usage we use @fmassa's optimize-net, which automatically shares output and gradient tensors between modules. This keeps memory usage below 4 Gb even for our best networks. Also, it can generate network graph plots as the one for WRN-16-2 below.
 
-<img src=https://cloud.githubusercontent.com/assets/4953728/15483030/fc74ec0c-2132-11e6-9e1f-9bc03a83eeea.png width=300>
+<center><img src=https://cloud.githubusercontent.com/assets/4953728/15483030/fc74ec0c-2132-11e6-9e1f-9bc03a83eeea.png width=300></center>
