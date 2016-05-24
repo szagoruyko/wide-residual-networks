@@ -1,6 +1,6 @@
 --  Wide Residual Network
 --  This is an implementation of the wide residual networks described in:
---  [a] "Wide Residual Networks", arXiv:1603.05027, 2016,
+--  "Wide Residual Networks", http://arxiv.org/abs/1605.07146
 --  authored by Sergey Zagoruyko and Nikos Komodakis
 
 --  ************************************************************************

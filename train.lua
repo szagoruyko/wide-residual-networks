@@ -1,4 +1,4 @@
--- Code for Wide Residual Networks
+-- Code for Wide Residual Networks http://arxiv.org/abs/1605.07146
 -- (c) Sergey Zagoruyko, 2016
 require 'xlua'
 require 'optim'
