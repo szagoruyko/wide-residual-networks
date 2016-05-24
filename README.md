@@ -101,6 +101,6 @@ Additional models in this repo:
 
 ## Implementation details
 
-The code evolved from https://github.com/szagoruyko/cifar.torch. To reduce memory usage we use @fmassa's optimize-net, which automatically shares output and gradient tensors between modules. This keeps memory usage below 4 Gb even for our best networks. Also, it can generate network graph plots as the one for WRN-16-2 below.
+The code evolved from https://github.com/szagoruyko/cifar.torch. To reduce memory usage we use @fmassa's [optimize-net](https://github.com/fmassa/optimize-net), which automatically shares output and gradient tensors between modules. This keeps memory usage below 4 Gb even for our best networks. Also, it can generate network graph plots as the one for WRN-16-2 below.
 
 <center><img src=https://cloud.githubusercontent.com/assets/4953728/15483030/fc74ec0c-2132-11e6-9e1f-9bc03a83eeea.png width=300></center>
