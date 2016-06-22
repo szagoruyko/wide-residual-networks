@@ -89,7 +89,7 @@ model=wide-resnet widen_factor=10 depth=28 dropout=0.3 dataset=./datasets/cifar1
 
 This network achieves 20.0% error on CIFAR-100 in about a day on a single Titan X.
 
-As WRNs are much faster to train than ResNets we don't provide any multi-GPU code. https://github.com/facebook/fb.resnet.torch should be trivial to modify for running WRN.
+Multi-GPU is supported with `nGPU=n` parameter.
 
 ## Other models
 
