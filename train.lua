@@ -7,6 +7,7 @@ require 'cunn'
 require 'cudnn'
 local c = require 'trepl.colorize'
 local json = require 'cjson'
+local utils = paths.dofile'models/utils.lua'
 paths.dofile'augmentation.lua'
 
 -- for memory optimizations and graph generation
@@ -44,6 +45,7 @@ opt = {
   generate_graph = false,
   multiply_input_factor = 1,
   widen_factor = 1,
+  nGPU = 1,
 }
 opt = xlua.envparams(opt)
 
@@ -58,12 +60,12 @@ print(c.blue '==>' ..' configuring model')
 local model = nn.Sequential()
 local net = dofile('models/'..opt.model..'.lua'):cuda()
 do
+   function nn.Copy.updateGradInput() end
    local function add(flag, module) if flag then model:add(module) end end
    add(opt.hflip, nn.BatchFlip():float())
    add(opt.randomcrop > 0, nn.RandomCrop(opt.randomcrop, opt.randomcrop_type):float())
    model:add(nn.Copy('torch.FloatTensor','torch.CudaTensor'):cuda())
    add(opt.multiply_input_factor ~= 1, nn.MulConstant(opt.multiply_input_factor):cuda())
-   model:add(net)
 
    cudnn.convert(net, cudnn)
    cudnn.benchmark = true
@@ -71,11 +73,11 @@ do
       for i,v in ipairs(net:findModules'cudnn.SpatialConvolution') do v:fastest() end
    end
    if opt.cudnn_deterministic then
-      model:apply(function(m) if m.setMode then m:setMode(1,1,1) end end)
+      net:apply(function(m) if m.setMode then m:setMode(1,1,1) end end)
    end
 
    print(net)
-   print('Network has', #model:findModules'cudnn.SpatialConvolution', 'convolutions')
+   print('Network has', #net:findModules'cudnn.SpatialConvolution', 'convolutions')
 
    local sample_input = torch.randn(8,3,opt.imageSize,opt.imageSize):cuda()
    if opt.generate_graph then
@@ -84,6 +86,8 @@ do
    if opt.optnet_optimize then
       optnet.optimizeMemory(net, sample_input, {inplace = false, mode = 'training'})
    end
+
+   model:add(utils.makeDataParallelTable(net, opt.nGPU))
 end
 
 local function log(t) print('json_stats: '..json.encode(tablex.merge(t,opt,true))) end
@@ -128,7 +132,7 @@ function train()
 
     optim[opt.optimMethod](function(x)
       if x ~= parameters then parameters:copy(x) end
-      gradParameters:zero()
+      model:zeroGradParameters()
       loss = loss + f(inputs, targets)
       return f,gradParameters
     end, parameters, optimState)
