@@ -87,8 +87,7 @@ do
       optnet.optimizeMemory(net, sample_input, {inplace = false, mode = 'training'})
    end
 
-   net = utils.makeDataParallelTable(net, opt.nGPU)
-   model:add(net)
+   model:add(utils.makeDataParallelTable(net, opt.nGPU))
 end
 
 local function log(t) print('json_stats: '..json.encode(tablex.merge(t,opt,true))) end
