@@ -48,4 +48,16 @@ function utils.makeDataParallelTable(model, nGPU)
    return model
 end
 
+function utils.separateBNParameters(model)
+   local typenets = {}
+   for i,module in ipairs(model:listModules()) do
+      if module.weight then
+         local tp = torch.type(module.weight)
+         if not typenets[tp] then typenets[tp] = nn.Sequential() end
+         typenets[tp]:add(module)
+      end
+   end
+   return typenets
+end
+
 return utils

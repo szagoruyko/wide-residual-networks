@@ -99,11 +99,14 @@ local function createModel(opt)
       model:add(SBatchNorm(nStages[4]))
       model:add(ReLU(true))
       model:add(Avg(8, 8, 1, 1))
-      model:add(nn.View(nStages[4]):setNumInputDims(3))
-      model:add(nn.Linear(nStages[4], opt.num_classes))
+      
+      -- workaround because nn.Linear does not work with half just yet
+      utils.DisableBias(model)
+      model:add(nn.SpatialConvolution(nStages[4],opt.num_classes,1,1))
+      model:add(nn.View(opt.num_classes):setNumInputDims(3))
+      -- model:add(nn.Linear(nStages[4], opt.num_classes))
    end
 
-   utils.DisableBias(model)
    utils.testModel(model)
    utils.MSRinit(model)
    utils.FCinit(model)

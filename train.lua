@@ -46,6 +46,7 @@ opt = {
   multiply_input_factor = 1,
   widen_factor = 1,
   nGPU = 1,
+  data_type = 'torch.CudaTensor',
 }
 opt = xlua.envparams(opt)
 
@@ -56,18 +57,24 @@ print(c.blue '==>' ..' loading data')
 local provider = torch.load(opt.dataset)
 opt.num_classes = provider.testData.labels:max()
 
+local function cast(input)
+   return input:type(opt.data_type)
+end
+
 print(c.blue '==>' ..' configuring model')
 local model = nn.Sequential()
-local net = dofile('models/'..opt.model..'.lua'):cuda()
+local net = cast(dofile('models/'..opt.model..'.lua'))
 do
-   function nn.Copy.updateGradInput() end
    local function add(flag, module) if flag then model:add(module) end end
    add(opt.hflip, nn.BatchFlip():float())
    add(opt.randomcrop > 0, nn.RandomCrop(opt.randomcrop, opt.randomcrop_type):float())
-   model:add(nn.Copy('torch.FloatTensor','torch.CudaTensor'):cuda())
-   add(opt.multiply_input_factor ~= 1, nn.MulConstant(opt.multiply_input_factor):cuda())
+   local copy_to = cast(nn.Copy('torch.FloatTensor', opt.data_type))
+   model:add(copy_to)
+   -- copy_to.updateGradInput = function() end
+   add(opt.multiply_input_factor ~= 1, cast(nn.MulConstant(opt.multiply_input_factor)))
 
-   cudnn.convert(net, cudnn)
+   cast(cudnn.convert(net, cudnn):cuda())
+
    cudnn.benchmark = true
    if opt.cudnn_fastest then
       for i,v in ipairs(net:findModules'cudnn.SpatialConvolution') do v:fastest() end
@@ -79,7 +86,7 @@ do
    print(net)
    print('Network has', #net:findModules'cudnn.SpatialConvolution', 'convolutions')
 
-   local sample_input = torch.randn(8,3,opt.imageSize,opt.imageSize):cuda()
+   local sample_input = cast(torch.randn(8,3,opt.imageSize,opt.imageSize))
    if opt.generate_graph then
       iterm.dot(graphgen(net, sample_input), opt.save..'/graph.pdf')
    end
@@ -88,6 +95,7 @@ do
    end
 
    model:add(utils.makeDataParallelTable(net, opt.nGPU))
+   model:add(nn.Copy(opt.data_type, 'torch.CudaTensor', nil, true):cuda())
 end
 
 local function log(t) print('json_stats: '..json.encode(tablex.merge(t,opt,true))) end
@@ -95,10 +103,19 @@ local function log(t) print('json_stats: '..json.encode(tablex.merge(t,opt,true)
 print('Will save at '..opt.save)
 paths.mkdir(opt.save)
 
-local parameters,gradParameters = model:getParameters()
+local typenets = utils.separateBNParameters(model)
 
-opt.n_parameters = parameters:numel()
-print('Network has ', parameters:numel(), 'parameters')
+local parameters,gradParameters = {}, {}
+local n_parameters = 0
+for k,v in pairs(typenets) do
+   local p,g = v:getParameters()
+   n_parameters = n_parameters + p:numel()
+   table.insert(parameters, p)
+   table.insert(gradParameters, g)
+end
+
+opt.n_parameters = n_parameters
+print('Network has ', n_parameters, 'parameters')
 
 print(c.blue'==>' ..' setting criterion')
 local criterion = nn.CrossEntropyCriterion():cuda()
@@ -113,7 +130,8 @@ local f = function(inputs, targets)
 end
 
 print(c.blue'==>' ..' configuring optimizer')
-local optimState = tablex.deepcopy(opt)
+local optimStates = {}
+for i,v in ipairs(parameters) do optimStates[i] = tablex.deepcopy(opt) end
 
 
 function train()
@@ -130,12 +148,15 @@ function train()
     local inputs = provider.trainData.data:index(1,v)
     targets:copy(provider.trainData.labels:index(1,v))
 
-    optim[opt.optimMethod](function(x)
-      if x ~= parameters then parameters:copy(x) end
-      model:zeroGradParameters()
-      loss = loss + f(inputs, targets)
-      return f,gradParameters
-    end, parameters, optimState)
+    model:zeroGradParameters()
+    loss = loss + f(inputs, targets)
+
+    for i,state in ipairs(optimStates) do
+       optim[opt.optimMethod](function(x)
+          if x ~= parameters[i] then parameters[i]:copy(x) end
+          return loss,gradParameters[i]
+       end, parameters[i], state)
+    end
   end
 
   return loss / #indices
