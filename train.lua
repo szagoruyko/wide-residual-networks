@@ -184,7 +184,7 @@ for epoch=1,opt.max_epoch do
   if torch.type(opt.epoch_step) == 'number' and epoch % opt.epoch_step == 0 or
      torch.type(opt.epoch_step) == 'table' and tablex.find(opt.epoch_step, epoch) then
     opt.learningRate = opt.learningRate * opt.learningRateDecayRatio
-    optimState = tablex.deepcopy(opt)
+    for i,v in ipairs(parameters) do optimStates[i] = tablex.deepcopy(opt) end
   end
 
   local function t(f) local s = torch.Timer(); return f(), s:time().real end
