@@ -5,6 +5,7 @@ require 'optim'
 require 'image'
 require 'cunn'
 require 'cudnn'
+local tnt = require 'torchnet'
 local c = require 'trepl.colorize'
 local json = require 'cjson'
 local utils = paths.dofile'models/utils.lua'
@@ -39,7 +40,6 @@ opt = {
   randomcrop = 4,
   imageSize = 32,
   randomcrop_type = 'zero',
-  cudnn_fastest = true,
   cudnn_deterministic = false,
   optnet_optimize = true,
   generate_graph = false,
@@ -69,9 +69,6 @@ do
 
    cudnn.convert(net, cudnn)
    cudnn.benchmark = true
-   if opt.cudnn_fastest then
-      for i,v in ipairs(net:findModules'cudnn.SpatialConvolution') do v:fastest() end
-   end
    if opt.cudnn_deterministic then
       net:apply(function(m) if m.setMode then m:setMode(1,1,1) end end)
    end
