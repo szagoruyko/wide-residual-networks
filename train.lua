@@ -3,13 +3,10 @@
 require 'xlua'
 require 'optim'
 require 'image'
-require 'cunn'
-require 'cudnn'
 local tnt = require 'torchnet'
 local c = require 'trepl.colorize'
 local json = require 'cjson'
 local utils = paths.dofile'models/utils.lua'
-paths.dofile'augmentation.lua'
 
 -- for memory optimizations and graph generation
 local optnet = require 'optnet'
@@ -17,7 +14,7 @@ local graphgen = require 'optnet.graphgen'
 local iterm = require 'iterm'
 require 'iterm.dot'
 
-opt = {
+local opt = {
   dataset = './datasets/cifar10_whitened.t7',
   save = 'logs',
   batchSize = 128,
@@ -46,6 +43,7 @@ opt = {
   multiply_input_factor = 1,
   widen_factor = 1,
   nGPU = 1,
+  data_type = 'torch.CudaTensor',
 }
 opt = xlua.envparams(opt)
 
@@ -56,18 +54,15 @@ print(c.blue '==>' ..' loading data')
 local provider = torch.load(opt.dataset)
 opt.num_classes = provider.testData.labels:max()
 
+local function cast(x) return x:type(opt.data_type) end
+
 print(c.blue '==>' ..' configuring model')
 local model = nn.Sequential()
-local net = dofile('models/'..opt.model..'.lua'):cuda()
-do
-   function nn.Copy.updateGradInput() end
-   local function add(flag, module) if flag then model:add(module) end end
-   add(opt.hflip, nn.BatchFlip():float())
-   add(opt.randomcrop > 0, nn.RandomCrop(opt.randomcrop, opt.randomcrop_type):float())
-   model:add(nn.Copy('torch.FloatTensor','torch.CudaTensor'):cuda())
-   add(opt.multiply_input_factor ~= 1, nn.MulConstant(opt.multiply_input_factor):cuda())
-
-   cudnn.convert(net, cudnn)
+local net = dofile('models/'..opt.model..'.lua')(opt)
+if opt.data_type:match'torch.Cuda.*Tensor' then
+   require 'cudnn'
+   require 'cunn'
+   cudnn.convert(net, cudnn):cuda()
    cudnn.benchmark = true
    if opt.cudnn_deterministic then
       net:apply(function(m) if m.setMode then m:setMode(1,1,1) end end)
@@ -84,7 +79,69 @@ do
       optnet.optimizeMemory(net, sample_input, {inplace = false, mode = 'training'})
    end
 
-   model:add(utils.makeDataParallelTable(net, opt.nGPU))
+end
+model:add(utils.makeDataParallelTable(net, opt.nGPU))
+cast(model)
+
+local function hflip(x)
+   return torch.random(0,1) == 1 and x or image.hflip(x)
+end
+
+local function randomcrop(x)
+   local pad = opt.randomcrop
+   if opt.randomcrop_type == 'reflection' then
+      module = nn.SpatialReflectionPadding(pad,pad,pad,pad):float()
+   elseif opt.randomcrop_type == 'zero' then
+      module = nn.SpatialZeroPadding(pad,pad,pad,pad):float()
+   else
+      error'unknown mode'
+   end
+
+   local imsize = opt.imageSize
+   local padded = module:forward(x)
+   local x = torch.random(1,pad*2 + 1)
+   local y = torch.random(1,pad*2 + 1)
+   return padded:narrow(3,x,imsize):narrow(2,y,imsize)
+end
+
+
+local function getIterator(mode)
+   return tnt.ParallelDatasetIterator{
+      nthread = 8,
+      init = function()
+         require 'torchnet'
+         require 'image'
+         require 'nn'
+      end,
+      closure = function()
+         local dataset = provider[mode..'Data']
+
+         local list_dataset = tnt.ListDataset{
+            list = torch.range(1, dataset.labels:numel()):long(),
+            load = function(idx)
+               return {
+                  input = dataset.data[idx]:float(),
+                  target = torch.LongTensor{dataset.labels[idx]},
+               }
+            end,
+         }
+
+         return tnt.BatchDataset{
+            batchsize = opt.batchSize,
+            policy = 'skip-last',
+            dataset = list_dataset,
+            dataset = mode == 'test' and list_dataset or
+               tnt.TransformDataset{
+                  dataset = list_dataset:shuffle(),
+                  transform = tnt.transform.compose{
+                     opt.hflip and hflip,
+                     opt.randomcrop > 0 and randomcrop,
+                  },
+                  key = 'input',
+               },
+         }
+      end,
+   }
 end
 
 local function log(t) print('json_stats: '..json.encode(tablex.merge(t,opt,true))) end
@@ -92,90 +149,75 @@ local function log(t) print('json_stats: '..json.encode(tablex.merge(t,opt,true)
 print('Will save at '..opt.save)
 paths.mkdir(opt.save)
 
-local parameters,gradParameters = model:getParameters()
+local engine = tnt.OptimEngine()
+local criterion = cast(nn.CrossEntropyCriterion())
+local meter = tnt.AverageValueMeter()
+local clerr = tnt.ClassErrorMeter{topk = {1}}
+local train_timer = torch.Timer()
+local test_timer = torch.Timer()
 
-opt.n_parameters = parameters:numel()
-print('Network has ', parameters:numel(), 'parameters')
-
-print(c.blue'==>' ..' setting criterion')
-local criterion = nn.CrossEntropyCriterion():cuda()
-
--- a-la autograd
-local f = function(inputs, targets)
-   model:forward(inputs)
-   local loss = criterion:forward(model.output, targets)
-   local df_do = criterion:backward(model.output, targets)
-   model:backward(inputs, df_do)
-   return loss
+engine.hooks.onStartEpoch = function(state)
+   local epoch = state.epoch + 1
+   print('==>'.." online epoch # " .. epoch .. ' [batchSize = ' .. opt.batchSize .. ']')
+   meter:reset()
+   clerr:reset()
+   train_timer:reset()
+   if torch.type(opt.epoch_step) == 'number' and epoch % opt.epoch_step == 0 or
+      torch.type(opt.epoch_step) == 'table' and tablex.find(opt.epoch_step, epoch) then
+      opt.learningRate = opt.learningRate * opt.learningRateDecayRatio
+      state.config = tablex.deepcopy(opt)
+      state.optim = tablex.deepcopy(opt)
+   end
 end
 
-print(c.blue'==>' ..' configuring optimizer')
-local optimState = tablex.deepcopy(opt)
+engine.hooks.onEndEpoch = function(state)
+   local train_loss = meter:value()
+   local train_err = clerr:value{k = 1}
+   local train_time = train_timer:time().real
+   meter:reset()
+   clerr:reset()
+   test_timer:reset()
 
+   engine:test{
+      network = model,
+      iterator = getIterator('test'),
+      criterion = criterion,
+   }
 
-function train()
-  model:training()
-
-  local targets = torch.CudaTensor(opt.batchSize)
-  local indices = torch.randperm(provider.trainData.data:size(1)):long():split(opt.batchSize)
-  -- remove last element so that all minibatches have equal size
-  indices[#indices] = nil
-
-  local loss = 0
-
-  for t,v in ipairs(indices) do
-    local inputs = provider.trainData.data:index(1,v)
-    targets:copy(provider.trainData.labels:index(1,v))
-
-    optim[opt.optimMethod](function(x)
-      if x ~= parameters then parameters:copy(x) end
-      model:zeroGradParameters()
-      loss = loss + f(inputs, targets)
-      return f,gradParameters
-    end, parameters, optimState)
-  end
-
-  return loss / #indices
-end
-
-
-function test()
-  model:evaluate()
-  local confusion = optim.ConfusionMatrix(opt.num_classes)
-  local data_split = provider.testData.data:split(opt.batchSize,1)
-  local labels_split = provider.testData.labels:split(opt.batchSize,1)
-
-  for i,v in ipairs(data_split) do
-    confusion:batchAdd(model:forward(v), labels_split[i])
-  end
-
-  confusion:updateValids()
-  return confusion.totalValid * 100
-end
-
-
-for epoch=1,opt.max_epoch do
-  print('==>'.." online epoch # " .. epoch .. ' [batchSize = ' .. opt.batchSize .. ']')
-  -- drop learning rate and reset momentum vector
-  if torch.type(opt.epoch_step) == 'number' and epoch % opt.epoch_step == 0 or
-     torch.type(opt.epoch_step) == 'table' and tablex.find(opt.epoch_step, epoch) then
-    opt.learningRate = opt.learningRate * opt.learningRateDecayRatio
-    optimState = tablex.deepcopy(opt)
-  end
-
-  local function t(f) local s = torch.Timer(); return f(), s:time().real end
-
-  local loss, train_time = t(train)
-  local test_acc, test_time = t(test)
-
-  log{
-     loss = loss,
-     epoch = epoch,
-     test_acc = test_acc,
-     lr = opt.learningRate,
-     train_time = train_time,
-     test_time = test_time,
+   log{
+      loss = train_loss,
+      train_loss = train_loss,
+      train_acc = 100 - train_err,
+      epoch = state.epoch,
+      test_acc = 100 - clerr:value{k = 1},
+      lr = opt.learningRate,
+      train_time = train_time,
+      test_time = test_timer:time().real,
+      n_parameters = state.params:numel(),
    }
 end
+
+engine.hooks.onForwardCriterion = function(state)
+   meter:add(state.criterion.output)
+   clerr:add(state.network.output, state.sample.target)
+end
+
+local inputs = cast(torch.Tensor())
+local targets = cast(torch.Tensor())
+engine.hooks.onSample = function(state)
+   inputs:resize(state.sample.input:size()):copy(state.sample.input)
+   targets:resize(state.sample.target:size()):copy(state.sample.target)
+   state.sample.input = inputs
+   state.sample.target = targets
+end
+
+engine:train{
+   network = model,
+   iterator = getIterator('train'),
+   criterion = criterion,
+   optimMethod = optim.sgd,
+   config = tablex.deepcopy(opt),
+   maxepoch = opt.max_epoch,
+}
 
 torch.save(opt.save..'/model.t7', net:clearState())

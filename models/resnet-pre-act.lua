@@ -27,10 +27,6 @@ local ReLU = nn.ReLU
 local Max = nn.SpatialMaxPooling
 local SBatchNorm = nn.SpatialBatchNormalization
 
-local function Dropout()
-   return nn[opt.dropout_type](opt.dropout and opt.dropout or 0,nil,true)
-end
-
 local function createModel(opt)
    local depth = opt.depth
    
@@ -137,4 +133,4 @@ local function createModel(opt)
    return model
 end
 
-return createModel(opt)
+return createModel

@@ -19,21 +19,21 @@
 local nn = require 'nn'
 local utils = paths.dofile'utils.lua'
 
-assert(opt and opt.depth)
-assert(opt and opt.num_classes)
-assert(opt and opt.widen_factor)
-
 local Convolution = nn.SpatialConvolution
 local Avg = nn.SpatialAveragePooling
 local ReLU = nn.ReLU
 local Max = nn.SpatialMaxPooling
 local SBatchNorm = nn.SpatialBatchNormalization
 
-local function Dropout()
-   return nn.Dropout(opt and opt.dropout or 0,nil,true)
-end
-
 local function createModel(opt)
+   assert(opt and opt.depth)
+   assert(opt and opt.num_classes)
+   assert(opt and opt.widen_factor)
+
+   local function Dropout()
+      return nn.Dropout(opt and opt.dropout or 0,nil,true)
+   end
+
    local depth = opt.depth
 
    local blocks = {}
@@ -113,4 +113,4 @@ local function createModel(opt)
    return model
 end
 
-return createModel(opt)
+return createModel
