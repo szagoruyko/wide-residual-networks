@@ -126,20 +126,20 @@ local function getIterator(mode)
             end,
          }
 
-         return tnt.BatchDataset{
-            batchsize = opt.batchSize,
-            policy = 'skip-last',
-            dataset = list_dataset,
-            dataset = mode == 'test' and list_dataset or
-               tnt.TransformDataset{
-                  dataset = list_dataset:shuffle(),
-                  transform = tnt.transform.compose{
+         if mode == 'train' then
+            return list_dataset
+               :shuffle()
+               :transform{
+                  input = tnt.transform.compose{
                      opt.hflip and hflip,
                      opt.randomcrop > 0 and randomcrop,
-                  },
-                  key = 'input',
-               },
-         }
+                  }
+               }
+               :batch(opt.batchSize, 'skip-last')
+         else
+            return list_dataset
+               :batch(opt.batchSize, 'include-last')
+         end
       end,
    }
 end
