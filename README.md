@@ -63,7 +63,7 @@ The code supports loading simple datasets in torch format. We provide the follow
 * CIFAR-100 whitened (using pylearn2) [preprocessed dataset](https://yadi.sk/d/em4b0FMgrnqxy)
 * SVHN [data preparation script](https://gist.github.com/szagoruyko/27712564a3f3765c5bfd933b56a21757)
 
-To whiten CIFAR-10 and CIFAR-100 we used the following scripts https://github.com/lisa-lab/pylearn2/blob/master/pylearn2/scripts/datasets/make_cifar10_gcn_whitened.py and then converted to torch using https://gist.github.com/szagoruyko/ad2977e4b8dceb64c68ea07f6abf397b.
+To whiten CIFAR-10 and CIFAR-100 we used the following scripts https://github.com/lisa-lab/pylearn2/blob/master/pylearn2/scripts/datasets/make_cifar10_gcn_whitened.py and then converted to torch using https://gist.github.com/szagoruyko/ad2977e4b8dceb64c68ea07f6abf397b and npy to torch converter https://github.com/htwaijry/npy4th.
 
 We are running ImageNet experiments and will update the paper and this repo soon.
 
