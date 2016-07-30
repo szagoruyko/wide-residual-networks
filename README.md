@@ -1,7 +1,7 @@
 Code for Wide Residual Networks
 =============
 
-This code was used for experiments with Wide Residual Networks http://arxiv.org/abs/1605.07146 by Sergey Zagoruyko and Nikos Komodakis.
+This code was used for experiments with Wide Residual Networks (BMVC 2016) http://arxiv.org/abs/1605.07146 by Sergey Zagoruyko and Nikos Komodakis.
 
 Deep residual networks were shown to be able to scale up to thousands of
 layers and still have improving performance. However, each fraction of a
