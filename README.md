@@ -41,6 +41,7 @@ See http://arxiv.org/abs/1605.07146 for details.
 The code depends on Torch http://torch.ch. Follow instructions [here](http://torch.ch/docs/getting-started.html) and run:
 
 ```
+luarocks install torchnet
 luarocks install optnet
 luarocks install iterm
 ```
