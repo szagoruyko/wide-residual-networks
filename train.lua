@@ -131,8 +131,8 @@ local function getIterator(mode)
                :shuffle()
                :transform{
                   input = tnt.transform.compose{
-                     opt.hflip and hflip,
-                     opt.randomcrop > 0 and randomcrop,
+                     opt.hflip and hflip or nil,
+                     opt.randomcrop > 0 and randomcrop or nil,
                   }
                }
                :batch(opt.batchSize, 'skip-last')
