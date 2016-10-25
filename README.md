@@ -57,9 +57,9 @@ For visualizing training curves we used ipython notebook with pandas and bokeh a
 The code supports loading simple datasets in torch format. We provide the following:
 
 * MNIST [data preparation script](https://gist.github.com/szagoruyko/8467ee15d020ab2a7ce80a215af71b74)
-* CIFAR-10 (coming)
+* CIFAR-10 [data preparation script](https://gist.github.com/szagoruyko/e5cf5e9b54661a817695c8c7b5c3dfa6), [preprocessed data, 176MB](https://yadi.sk/d/eFmOduZyxaBrT)
 * CIFAR-10 whitened (using pylearn2) [preprocessed dataset](https://yadi.sk/d/em4b0FMgrnqxy)
-* CIFAR-100 (coming)
+* CIFAR-100 [data preparation script](https://gist.github.com/szagoruyko/01bfa936396f913a899ee49b98e7304b), [preprocessed data, 176MB](https://yadi.sk/d/ZbiXAegjxaBcM)
 * CIFAR-100 whitened (using pylearn2) [preprocessed dataset](https://yadi.sk/d/em4b0FMgrnqxy)
 * SVHN [data preparation script](https://gist.github.com/szagoruyko/27712564a3f3765c5bfd933b56a21757)
 
