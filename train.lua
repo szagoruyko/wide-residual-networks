@@ -44,15 +44,28 @@ local opt = {
   widen_factor = 1,
   nGPU = 1,
   data_type = 'torch.CudaTensor',
+  seed = 444,
 }
 opt = xlua.envparams(opt)
+
+
+torch.manualSeed(opt.seed)
 
 opt.epoch_step = tonumber(opt.epoch_step) or loadstring('return '..opt.epoch_step)()
 print(opt)
 
+local meanstd = {mean = {125.3, 123.0, 113.9}, std  = {63.0,  62.1,  66.7}}
 print(c.blue '==>' ..' loading data')
 local provider = torch.load(opt.dataset)
 opt.num_classes = provider.testData.labels:max()
+if torch.type(provider.trainData.data) == 'torch.ByteTensor' then
+   for i,v in ipairs{'trainData', 'testData'} do
+      provider[v].data = provider[v].data:float()--:div(256)
+      for ch=1,3 do
+         provider[v].data:select(2,ch):add(-meanstd.mean[ch]):div(meanstd.std[ch])
+      end
+   end
+end
 
 local function cast(x) return x:type(opt.data_type) end
 
@@ -63,7 +76,6 @@ if opt.data_type:match'torch.Cuda.*Tensor' then
    require 'cudnn'
    require 'cunn'
    cudnn.convert(net, cudnn):cuda()
-   cudnn.benchmark = true
    if opt.cudnn_deterministic then
       net:apply(function(m) if m.setMode then m:setMode(1,1,1) end end)
    end
@@ -78,7 +90,8 @@ if opt.data_type:match'torch.Cuda.*Tensor' then
    if opt.optnet_optimize then
       optnet.optimizeMemory(net, sample_input, {inplace = false, mode = 'training'})
    end
-
+   -- to avoid optnet messing cudnn FindEx
+   cudnn.benchmark = true
 end
 model:add(utils.makeDataParallelTable(net, opt.nGPU))
 cast(model)
@@ -106,40 +119,41 @@ end
 
 
 local function getIterator(mode)
+   local dataset = provider[mode..'Data']
+
+   local list_dataset = tnt.ListDataset{
+      list = torch.range(1, dataset.labels:numel()):long(),
+      load = function(idx)
+         return {
+            input = dataset.data[idx]:float(),
+            target = torch.LongTensor{dataset.labels[idx]},
+         }
+      end,
+   }
+
+   local d = mode == 'train' and list_dataset
+         :shuffle()
+         :transform{
+            input = tnt.transform.compose{
+               opt.hflip and hflip or nil,
+               opt.randomcrop > 0 and randomcrop or nil,
+            }
+         }
+         :batch(opt.batchSize, 'skip-last')
+      or list_dataset
+         :batch(opt.batchSize, 'include-last')
+
+   function d:manualSeed(seed) torch.manualSeed(seed) end
+
    return tnt.ParallelDatasetIterator{
-      nthread = 8,
+      nthread = 2,
       init = function()
          require 'torchnet'
          require 'image'
          require 'nn'
       end,
       closure = function()
-         local dataset = provider[mode..'Data']
-
-         local list_dataset = tnt.ListDataset{
-            list = torch.range(1, dataset.labels:numel()):long(),
-            load = function(idx)
-               return {
-                  input = dataset.data[idx]:float(),
-                  target = torch.LongTensor{dataset.labels[idx]},
-               }
-            end,
-         }
-
-         if mode == 'train' then
-            return list_dataset
-               :shuffle()
-               :transform{
-                  input = tnt.transform.compose{
-                     opt.hflip and hflip or nil,
-                     opt.randomcrop > 0 and randomcrop or nil,
-                  }
-               }
-               :batch(opt.batchSize, 'skip-last')
-         else
-            return list_dataset
-               :batch(opt.batchSize, 'include-last')
-         end
+         return d
       end,
    }
 end
@@ -168,6 +182,9 @@ engine.hooks.onStartEpoch = function(state)
       state.config = tablex.deepcopy(opt)
       state.optim = tablex.deepcopy(opt)
    end
+
+   state.iterator:exec('manualSeed', state.epoch + 1)
+   state.iterator:exec'resample'
 end
 
 engine.hooks.onEndEpoch = function(state)
