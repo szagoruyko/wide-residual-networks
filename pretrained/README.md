@@ -14,6 +14,9 @@ The model is slower than ResNet-101 and faster than ResNet-152, with better accu
 
 Download (263MB): https://yadi.sk/d/-8AWymOPyVZns
 
+PyTorch and Tensorflow pretrained weights and model definitions:<br>
+<https://github.com/szagoruyko/functional-zoo/blob/master/wide-resnet-50-2-export.ipynb>
+
 Convergence plot:
 
 ![bokeh_plot 4](https://cloud.githubusercontent.com/assets/4953728/20243021/98a2a66a-a945-11e6-807b-a037f667c052.png)
