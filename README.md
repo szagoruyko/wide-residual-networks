@@ -68,6 +68,9 @@ bibtex:
 WRN-50-2-bottleneck (wider bottleneck), see [pretrained](pretrained/README.md) for details<br>
 Download (263MB): https://yadi.sk/d/-8AWymOPyVZns
 
+There are also PyTorch and Tensorflow model definitions with pretrained weights at
+<https://github.com/szagoruyko/functional-zoo/blob/master/wide-resnet-50-2-export.ipynb>
+
 ## COCO
 
 Coming
