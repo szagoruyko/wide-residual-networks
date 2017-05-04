@@ -28,5 +28,5 @@ pip install -r requirements.txt
 Train WRN-28-10 on 4 GPUs:
 
 ```
-python main.py main.py --save ./logs/resnet_$RANDOM$RANDOM --depth 28 --width 10 --ngpu 4 --gpu_id 0,1,2,3
+python main.py --save ./logs/resnet_$RANDOM$RANDOM --depth 28 --width 10 --ngpu 4 --gpu_id 0,1,2,3
 ```
