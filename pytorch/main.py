@@ -17,7 +17,7 @@ from tqdm import tqdm
 import torch
 import torch.optim
 import torch.utils.data
-import torchvision.cvtransforms as T
+import cvtransforms as T
 import torchvision.datasets as datasets
 from torch.autograd import Variable
 import torch.nn.functional as F
