@@ -43,7 +43,7 @@ def data_parallel(f, input, params, stats, mode, device_ids, output_device=None)
 
     def replicate(param_dict, g):
         replicas = [{} for d in device_ids]
-        for k,v in param_dict.iteritems():
+        for k,v in param_dict.items():
             for i,u in enumerate(g(v)):
                 replicas[i][k] = u
         return replicas
