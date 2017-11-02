@@ -13,15 +13,14 @@ def cast(params, dtype='float'):
         return {k: cast(v, dtype) for k,v in params.items()}
     else:
         return getattr(params.cuda(), dtype)()
-        
 
 def conv_params(ni,no,k=1,g=1):
     assert ni % g == 0
-    return cast(torch.Tensor(no,ni/g,k,k).normal_(0,2/math.sqrt(ni*k*k)))
+    return cast(torch.Tensor(no,ni/g,k,k).normal_(0,math.sqrt(2./(ni*k*k))))
 
 def linear_params(ni,no):
     return cast(dict(
-        weight=torch.Tensor(no,ni).normal_(0,2/math.sqrt(ni)),
+        weight=torch.Tensor(no,ni).normal_(0,math.sqrt(2./ni)),
         bias=torch.zeros(no)))
 
 def bnparams(n):
