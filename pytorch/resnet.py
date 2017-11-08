@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from utils import conv_params, linear_params, bnparams, bnstats, \
-        flatten_params, flatten_stats
+        flatten_params, flatten_stats, batch_norm
 
 
 def resnet(depth, width, num_classes):
@@ -26,36 +26,26 @@ def resnet(depth, width, num_classes):
         return {'block%d' % i: {'bn0': bnstats(ni if i == 0 else no), 'bn1': bnstats(no)}
                 for i in range(count)}
 
-    params = {
+    flat_params = flatten_params({
         'conv0': conv_params(3,16,3),
         'group0': gen_group_params(16, widths[0], n),
         'group1': gen_group_params(widths[0], widths[1], n),
         'group2': gen_group_params(widths[1], widths[2], n),
         'bn': bnparams(widths[2]),
         'fc': linear_params(widths[2], num_classes),
-    }
+    })
 
-    stats = {
+    flat_stats = flatten_stats({
         'group0': gen_group_stats(16, widths[0], n),
         'group1': gen_group_stats(widths[0], widths[1], n),
         'group2': gen_group_stats(widths[1], widths[2], n),
         'bn': bnstats(widths[2]),
-    }
-
-    flat_params = flatten_params(params)
-    flat_stats = flatten_stats(stats)
-
-    def activation(x, params, stats, base, mode):
-        return F.relu(F.batch_norm(x, weight=params[base + '.weight'],
-                                   bias=params[base + '.bias'],
-                                   running_mean=stats[base + '.running_mean'],
-                                   running_var=stats[base + '.running_var'],
-                                   training=mode, momentum=0.1, eps=1e-5), inplace=True)
+    })
 
     def block(x, params, stats, base, mode, stride):
-        o1 = activation(x, params, stats, base + '.bn0', mode)
+        o1 = F.relu(batch_norm(x, params, stats, base + '.bn0', mode), inplace=True)
         y = F.conv2d(o1, params[base + '.conv0'], stride=stride, padding=1)
-        o2 = activation(y, params, stats, base + '.bn1', mode)
+        o2 = F.relu(batch_norm(y, params, stats, base + '.bn1', mode), inplace=True)
         z = F.conv2d(o2, params[base + '.conv1'], stride=1, padding=1)
         if base + '.convdim' in params:
             return z + F.conv2d(o1, params[base + '.convdim'], stride=stride)
@@ -68,12 +58,11 @@ def resnet(depth, width, num_classes):
         return o
 
     def f(input, params, stats, mode):
-        assert input.get_device() == params['conv0'].get_device()
         x = F.conv2d(input, params['conv0'], padding=1)
         g0 = group(x, params, stats, 'group0', mode, 1)
         g1 = group(g0, params, stats, 'group1', mode, 2)
         g2 = group(g1, params, stats, 'group2', mode, 2)
-        o = activation(g2, params, stats, 'bn', mode)
+        o = F.relu(batch_norm(g2, params, stats, 'bn', mode))
         o = F.avg_pool2d(o, 8, 1, 0)
         o = o.view(o.size(0), -1)
         o = F.linear(o, params['fc.weight'], params['fc.bias'])
