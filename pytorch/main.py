@@ -140,7 +140,7 @@ def main():
     def h(sample):
         inputs = Variable(cast(sample[0], opt.dtype))
         targets = Variable(cast(sample[1], 'long'))
-        y = data_parallel(f, inputs, params, stats, sample[2], np.arange(opt.ngpu))
+        y = data_parallel(f, inputs, params, stats, sample[2], list(range(opt.ngpu)))
         return F.cross_entropy(y, targets), y
 
     def log(t, state):
