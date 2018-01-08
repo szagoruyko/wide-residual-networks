@@ -34,24 +34,21 @@ def bnstats(n):
 
 
 def data_parallel(f, input, params, stats, mode, device_ids, output_device=None):
+    assert isinstance(device_ids, list)
     if output_device is None:
         output_device = device_ids[0]
 
     if len(device_ids) == 1:
         return f(input, params, stats, mode)
 
-    def replicate(param_dict, g):
-        replicas = [{} for d in device_ids]
-        for k,v in param_dict.items():
-            for i,u in enumerate(g(v)):
-                replicas[i][k] = u
-        return replicas
-
-    params_replicas = replicate(params, lambda x: Broadcast(device_ids)(x))
-    stats_replicas = replicate(stats, lambda x: comm.broadcast(x, device_ids))
+    params_all = Broadcast.apply(device_ids, *params.values())
+    params_replicas = [{k: params_all[i + j*len(params)] for i, k in enumerate(params.keys())}
+                       for j in range(len(device_ids))]
+    stats_replicas = [dict(zip(stats.keys(), p))
+                      for p in comm.broadcast_coalesced(list(stats.values()), device_ids)]
 
     replicas = [partial(f, params=p, stats=s, mode=mode)
-                for p,s in zip(params_replicas, stats_replicas)]
+                for p, s in zip(params_replicas, stats_replicas)]
     inputs = scatter([input], device_ids)
     outputs = parallel_apply(replicas, inputs)
     return gather(outputs, output_device)
