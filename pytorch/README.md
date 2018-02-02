@@ -10,13 +10,7 @@ https://github.com/szagoruyko/wide-residual-networks
 
 # Requirements
 
-The script depends on opencv python bindings, easily installable via conda:
-
-```
-conda install -c menpo opencv3
-```
-
-After that and after installing pytorch do:
+Install requirements:
 
 ```
 pip install -r requirements.txt
