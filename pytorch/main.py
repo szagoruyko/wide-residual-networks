@@ -15,15 +15,15 @@ import numpy as np
 from tqdm import tqdm
 import torch
 from torch.optim import SGD
-from torch.utils.data import DataLoader
-from torchvision import datasets
+import torch.utils.data
 import torchvision.transforms as T
-from torch.autograd import Variable
+import torchvision.datasets as datasets
+from torch.utils.data import DataLoader
 import torch.nn.functional as F
 import torchnet as tnt
 from torchnet.engine import Engine
 from utils import cast, data_parallel, print_tensor_dict
-import torch.backends.cudnn as cudnn
+from torch.backends import cudnn
 from resnet import resnet
 
 cudnn.benchmark = True
@@ -38,6 +38,7 @@ parser.add_argument('--dataroot', default='.', type=str)
 parser.add_argument('--dtype', default='float', type=str)
 parser.add_argument('--groups', default=1, type=int)
 parser.add_argument('--nthread', default=4, type=int)
+parser.add_argument('--seed', default=1, type=int)
 
 # Training options
 parser.add_argument('--batch_size', default=128, type=int)
@@ -49,7 +50,7 @@ parser.add_argument('--epoch_step', default='[60,120,160]', type=str,
                     help='json list with epochs to drop lr on')
 parser.add_argument('--lr_decay_ratio', default=0.2, type=float)
 parser.add_argument('--resume', default='', type=str)
-parser.add_argument('--randomcrop_pad', default=4, type=float)
+parser.add_argument('--note', default='', type=str)
 
 # Device options
 parser.add_argument('--cuda', action='store_true')
@@ -69,15 +70,12 @@ def create_dataset(opt, train):
     ])
     if train:
         transform = T.Compose([
+            T.Pad(4, padding_mode='reflect'),
             T.RandomHorizontalFlip(),
             T.RandomCrop(32),
             transform
         ])
-
-    ds = getattr(datasets, opt.dataset)(opt.dataroot, train=train, download=True, transform=transform)
-    if train:
-        ds.train_data = np.pad(ds.train_data, ((0,0), (4,4), (4,4), (0,0)), mode='reflect')
-    return ds
+    return getattr(datasets, opt.dataset)(opt.dataroot, train=train, download=True, transform=transform)
 
 
 def main():
@@ -86,20 +84,21 @@ def main():
     epoch_step = json.loads(opt.epoch_step)
     num_classes = 10 if opt.dataset == 'CIFAR10' else 100
 
+    torch.manual_seed(opt.seed)
     os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpu_id
 
-    def create_iterator(train):
-        return DataLoader(create_dataset(opt, train), batch_size=opt.batch_size, shuffle=train,
+    def create_iterator(mode):
+        return DataLoader(create_dataset(opt, mode), opt.batch_size, shuffle=mode,
                           num_workers=opt.nthread, pin_memory=torch.cuda.is_available())
 
     train_loader = create_iterator(True)
     test_loader = create_iterator(False)
 
-    f, params, stats = resnet(opt.depth, opt.width, num_classes)
+    f, params = resnet(opt.depth, opt.width, num_classes)
 
     def create_optimizer(opt, lr):
         print('creating optimizer with lr = ', lr)
-        return SGD(params.values(), lr, 0.9, weight_decay=opt.weight_decay)
+        return SGD([v for v in params.values() if v.requires_grad], lr, momentum=0.9, weight_decay=opt.weight_decay)
 
     optimizer = create_optimizer(opt, opt.lr)
 
@@ -107,17 +106,15 @@ def main():
     if opt.resume != '':
         state_dict = torch.load(opt.resume)
         epoch = state_dict['epoch']
-        params_tensors, stats = state_dict['params'], state_dict['stats']
+        params_tensors = state_dict['params']
         for k, v in params.items():
             v.data.copy_(params_tensors[k])
         optimizer.load_state_dict(state_dict['optimizer'])
 
     print('\nParameters:')
     print_tensor_dict(params)
-    print('\nAdditional buffers:')
-    print_tensor_dict(stats)
 
-    n_parameters = sum(p.numel() for p in params.values())
+    n_parameters = sum(p.numel() for p in params.values() if p.requires_grad)
     print('\nTotal number of parameters:', n_parameters)
 
     meter_loss = tnt.meter.AverageValueMeter()
@@ -129,29 +126,28 @@ def main():
         os.mkdir(opt.save)
 
     def h(sample):
-        inputs = Variable(cast(sample[0], opt.dtype))
-        targets = Variable(cast(sample[1], 'long'))
-        y = data_parallel(f, inputs, params, stats, sample[2], list(range(opt.ngpu)))
+        inputs = cast(sample[0], opt.dtype)
+        targets = cast(sample[1], 'long')
+        y = data_parallel(f, inputs, params, sample[2], list(range(opt.ngpu))).float()
         return F.cross_entropy(y, targets), y
 
     def log(t, state):
-        torch.save(dict(params={k: v.data for k, v in params.items()},
-                        stats=stats,
-                        optimizer=state['optimizer'].state_dict(),
-                        epoch=t['epoch']),
-                   open(os.path.join(opt.save, 'model.pt7'), 'wb'))
-        z = vars(opt).copy(); z.update(t)
-        logname = os.path.join(opt.save, 'log.txt')
-        with open(logname, 'a') as f:
-            f.write('json_stats: ' + json.dumps(z) + '\n')
+        torch.save(dict(params=params, epoch=t['epoch'], optimizer=state['optimizer'].state_dict()),
+                   os.path.join(opt.save, 'model.pt7'))
+        z = {**vars(opt), **t}
+        with open(os.path.join(opt.save, 'log.txt'), 'a') as flog:
+            flog.write('json_stats: ' + json.dumps(z) + '\n')
         print(z)
 
     def on_sample(state):
         state['sample'].append(state['train'])
 
     def on_forward(state):
-        classacc.add(state['output'].data, torch.LongTensor(state['sample'][1]))
-        meter_loss.add(state['loss'].data[0])
+        loss = float(state['loss'])
+        classacc.add(state['output'].data, state['sample'][1])
+        meter_loss.add(loss)
+        if state['train']:
+            state['iterator'].set_postfix(loss=loss)
 
     def on_start(state):
         state['epoch'] = epoch
@@ -160,7 +156,7 @@ def main():
         classacc.reset()
         meter_loss.reset()
         timer_train.reset()
-        state['iterator'] = tqdm(train_loader)
+        state['iterator'] = tqdm(train_loader, dynamic_ncols=True)
 
         epoch = state['epoch'] + 1
         if epoch in epoch_step:
@@ -175,7 +171,8 @@ def main():
         classacc.reset()
         timer_test.reset()
 
-        engine.test(h, test_loader)
+        with torch.no_grad():
+            engine.test(h, test_loader)
 
         test_acc = classacc.value()[0]
         print(log({
@@ -189,7 +186,7 @@ def main():
             "train_time": train_time,
             "test_time": timer_test.value(),
         }, state))
-        print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m' % \
+        print('==> id: %s (%d/%d), test_acc: \33[91m%.2f\033[0m' %
               (opt.save, state['epoch'], opt.epochs, test_acc))
 
     engine = Engine()
