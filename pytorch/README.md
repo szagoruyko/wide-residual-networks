@@ -26,4 +26,11 @@ Train WRN-28-10 on 4 GPUs:
 
 ```
 python3  main.py --save ./logs/resnet_$RANDOM$RANDOM --depth 28 --width 10 --ngpu 2 --gpu_id 0,1 
+
+```
+
+With dropout on my laptop
+
+```
+python3  main.py --save ./logs/resnet_dropout/ --depth 28 --width 10 --ngpu 1 --gpu_id 0 --batch_size 32 --dropout_prob 0.2
 ```

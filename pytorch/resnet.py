@@ -3,7 +3,7 @@ import torch.nn.functional as F
 import utils
 
 
-def resnet(depth, width, num_classes):
+def resnet(depth, width, num_classes, dropout_prob):
     assert (depth - 4) % 6 == 0, 'depth should be 6n+4'
     n = (depth - 4) // 6
     widths = [int(v * width) for v in (16, 32, 64)]
@@ -36,6 +36,8 @@ def resnet(depth, width, num_classes):
         o1 = F.relu(utils.batch_norm(x, params, base + '.bn0', mode), inplace=True)
         y = F.conv2d(o1, params[base + '.conv0'], stride=stride, padding=1)
         o2 = F.relu(utils.batch_norm(y, params, base + '.bn1', mode), inplace=True)
+        if dropout_prob:
+            o2 = F.dropout2d(o2, p=dropout_prob, training=mode)
         z = F.conv2d(o2, params[base + '.conv1'], stride=1, padding=1)
         if base + '.convdim' in params:
             return z + F.conv2d(o1, params[base + '.convdim'], stride=stride)
