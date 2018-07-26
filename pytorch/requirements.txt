@@ -1,4 +1,5 @@
 nested_dict
 tqdm
+torch
 torchvision
-torchnet
+

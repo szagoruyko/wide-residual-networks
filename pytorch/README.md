@@ -13,8 +13,11 @@ https://github.com/szagoruyko/wide-residual-networks
 Install requirements:
 
 ```
-pip install -r requirements.txt
+sudo pip3 install -r requirements.txt 
+sudo pip3 install git+https://github.com/pytorch/tnt.git@master
+
 ```
+
 
 
 # Howto
@@ -22,5 +25,5 @@ pip install -r requirements.txt
 Train WRN-28-10 on 4 GPUs:
 
 ```
-python main.py --save ./logs/resnet_$RANDOM$RANDOM --depth 28 --width 10 --ngpu 4 --gpu_id 0,1,2,3
+python3  main.py --save ./logs/resnet_$RANDOM$RANDOM --depth 28 --width 10 --ngpu 2 --gpu_id 0,1 
 ```
