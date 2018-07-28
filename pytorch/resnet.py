@@ -32,23 +32,23 @@ def resnet(depth, width, num_classes, dropout_prob, activation_dropout):
 
     utils.set_requires_grad_except_bn_(flat_params)
 
-        def activation_dropout(x, p_drop, training):
-            if training:
-                # the input P. is the base DROPOUT PROBABILITY
-                P = 1.-p_drop
-                # x.size() = [bs, f , h, w]
-                #sum over w and h to get total activation of a filter across space -> [bs, f]
-                # normalize feature activations to 1 for each example in the batch
-                bs, N, w, h = x.size()
-                p_act = F.normalize(x.sum(-1).sum(-1), p=1, dim=-1)
-                p_retain = 1. - ( (1.-P)*(N-1.)*p_act ) / ( ((1.-P)*N-1.)*p_act+P )
-                mask = torch.bernoulli(p_retain)
-                mask =  torch.stack([mask for i in range(w)], -1)
-                mask =  torch.stack([mask for i in range(h)], -1)
-                
-                return mask*x
-            else:
-                return x
+    def activation_dropout(x, p_drop, training):
+        if training:
+            # the input P. is the base DROPOUT PROBABILITY
+            P = 1.-p_drop
+            # x.size() = [bs, f , h, w]
+            #sum over w and h to get total activation of a filter across space -> [bs, f]
+            # normalize feature activations to 1 for each example in the batch
+            bs, N, w, h = x.size()
+            p_act = F.normalize(x.sum(-1).sum(-1), p=1, dim=-1)
+            p_retain = 1. - ( (1.-P)*(N-1.)*p_act ) / ( ((1.-P)*N-1.)*p_act+P )
+            mask = torch.bernoulli(p_retain)
+            mask =  torch.stack([mask for i in range(w)], -1)
+            mask =  torch.stack([mask for i in range(h)], -1)
+            
+            return mask*x
+        else:
+            return x
         
     
     def block(x, params, base, mode, stride):
@@ -56,7 +56,7 @@ def resnet(depth, width, num_classes, dropout_prob, activation_dropout):
         y = F.conv2d(o1, params[base + '.conv0'], stride=stride, padding=1)
         o2 = F.relu(utils.batch_norm(y, params, base + '.bn1', mode), inplace=True)
         if activation_dropout:
-            o2 = activation_dropout(o2, p=dropout_prob, training=mode)
+            o2 = activation_dropout(o2, p_drop=dropout_prob, training=mode)
         elif dropout_prob:
             o2 = F.dropout2d(o2, p=dropout_prob, training=mode)
         z = F.conv2d(o2, params[base + '.conv1'], stride=1, padding=1)
