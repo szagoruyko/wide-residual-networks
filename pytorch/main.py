@@ -40,6 +40,7 @@ parser.add_argument('--groups', default=1, type=int)
 parser.add_argument('--nthread', default=4, type=int)
 parser.add_argument('--seed', default=1, type=int)
 parser.add_argument('--dropout_prob', default=0., type=float)
+parser.add_argument('--activation_dropout', default=False, type=bool)
 
 # Training options
 parser.add_argument('--batch_size', default=128, type=int)
@@ -94,8 +95,11 @@ def main():
 
     train_loader = create_iterator(True)
     test_loader = create_iterator(False)
-
-    f, params = resnet(opt.depth, opt.width, num_classes, opt.dropout_prob)
+     
+    if opt.activation_dropout:
+        print('[*********] Using activation dropout')
+        
+    f, params = resnet(opt.depth, opt.width, num_classes, opt.dropout_prob, opt.activation_dropout)
 
     def create_optimizer(opt, lr):
         print('creating optimizer with lr = ', lr)
