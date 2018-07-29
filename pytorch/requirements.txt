@@ -1,5 +1,5 @@
 nested_dict
 tqdm
-torch
+torch==0.4.0
 torchvision
 
