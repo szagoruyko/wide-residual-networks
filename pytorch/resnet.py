@@ -43,6 +43,8 @@ def resnet(depth, width, num_classes, dropout_prob, activation_dropout):
             p_act = F.normalize(x.sum(-1).sum(-1), p=1, dim=-1)
             p_retain = 1. - ( (1.-P)*(N-1.)*p_act ) / ( ((1.-P)*N-1.)*p_act+P )
             mask = torch.bernoulli(p_retain)
+            scale = mask.mean(-1)
+            mask = mask/torch.stack([scale for i in range(N)], -1)
             mask =  torch.stack([mask for i in range(w)], -1)
             mask =  torch.stack([mask for i in range(h)], -1)
             

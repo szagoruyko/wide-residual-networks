@@ -15,6 +15,8 @@ Install requirements:
 ```
 sudo pip3 install -r requirements.txt 
 sudo pip3 install git+https://github.com/pytorch/tnt.git@master
+sudo pip3 install torchnet==0.0.2
+sudo pip3 install torch==0.4.0
 
 ```
 
