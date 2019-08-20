@@ -23,7 +23,13 @@ thousand-layer-deep networks. We further show that WRNs achieve **incredibly**
 good results (e.g., achieving new state-of-the-art results on
 CIFAR-10, CIFAR-100, SVHN, COCO and substantial improvements on ImageNet) and train **several times faster** than pre-activation ResNets.
 
-**Update:** We updated the paper with ImageNet, COCO and meanstd preprocessing CIFAR results.
+**Update (August 2019):** Pretrained ImageNet WRN models are available in
+torchvision 0.4 and [PyTorch Hub](https://pytorch.org/hub/pytorch_vision_wide_resnet/), e.g. loading WRN-50-2:
+```python
+model = torch.hub.load('pytorch/vision', 'wide_resnet50_2', pretrained=True)
+```
+
+**Update (November 2016):** We updated the paper with ImageNet, COCO and meanstd preprocessing CIFAR results.
 If you're comparing your method against WRN, please report correct preprocessing numbers because they give substantially different results.
 
 tldr; ImageNet WRN-50-2-bottleneck (ResNet-50 with wider inner bottleneck 3x3 convolution) is significantly faster than ResNet-152 and has better accuracy; on CIFAR meanstd preprocessing (as in fb.resnet.torch) gives better results than ZCA whitening; on COCO wide ResNet with 34 layers outperforms even Inception-v4-based Fast-RCNN model in single model performance.
